@@ -23,15 +23,40 @@ async function handleBookingCreated(payload: BookingPayload): Promise<void> {
 }
 
 async function handleBookingRescheduled(payload: BookingPayload): Promise<void> {
-  const taskId = await storage.getTaskId(payload.uid);
+  // When rescheduling, Cal.com creates a new booking with a new UID
+  // The original booking's UID is in rescheduleUid
+  let taskId: string | null = null;
+  let oldUid: string | null = null;
+
+  // First, try to find the task using the original booking's UID
+  if (payload.rescheduleUid) {
+    taskId = await storage.getTaskId(payload.rescheduleUid);
+    if (taskId) {
+      oldUid = payload.rescheduleUid;
+    }
+  }
+
+  // Fall back to checking the new UID (in case of re-reschedule or other edge cases)
   if (!taskId) {
-    console.log(`No task found for booking ${payload.uid}, creating new task`);
+    taskId = await storage.getTaskId(payload.uid);
+  }
+
+  if (!taskId) {
+    console.log(`No task found for booking ${payload.uid} (rescheduleUid: ${payload.rescheduleUid}), creating new task`);
     await handleBookingCreated(payload);
     return;
   }
 
   await todoist.updateTaskDueDate(taskId, payload);
-  console.log(`Updated task ${taskId} with new schedule for booking ${payload.uid}`);
+
+  // Migrate the storage mapping from old UID to new UID
+  if (oldUid && oldUid !== payload.uid) {
+    await storage.deleteMapping(oldUid);
+    await storage.saveMapping(payload.uid, taskId);
+    console.log(`Updated task ${taskId} and migrated mapping from ${oldUid} to ${payload.uid}`);
+  } else {
+    console.log(`Updated task ${taskId} with new schedule for booking ${payload.uid}`);
+  }
 }
 
 async function handleBookingCancelled(payload: BookingPayload): Promise<void> {
