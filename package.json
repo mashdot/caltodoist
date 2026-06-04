@@ -4,9 +4,14 @@
   "description": "Cal.com to Todoist webhook integration",
   "main": "dist/netlify/functions/api.js",
   "scripts": {
-    "build": "tsc && cp -r public/* dist/",
+    "build": "tsc -p tsconfig.build.json && cp -r public/* dist/",
     "dev": "netlify dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "keywords": ["cal.com", "todoist", "webhook", "netlify"],
   "author": "",
@@ -17,8 +22,10 @@
     "@netlify/functions": "^3.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18.14.0"

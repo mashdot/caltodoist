@@ -1,13 +1,20 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export function verifyWebhookSignature(
   payload: string,
   signature: string | undefined,
   secret: string | undefined
 ): boolean {
-  // If no secret is configured, skip verification
+  // If no secret is configured, fail closed in production. Only skip
+  // verification outside production (local dev) as a convenience.
   if (!secret) {
-    console.warn('CALCOM_WEBHOOK_SECRET not set - skipping signature verification');
+    if (process.env.NODE_ENV === 'production') {
+      console.error('CALCOM_WEBHOOK_SECRET not set - rejecting webhook (cannot verify signature)');
+      return false;
+    }
+    console.warn(
+      'CALCOM_WEBHOOK_SECRET not set - skipping signature verification (non-production only)'
+    );
     return true;
   }
 
@@ -16,9 +23,7 @@ export function verifyWebhookSignature(
     return false;
   }
 
-  const expectedSignature = createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
+  const expectedSignature = createHmac('sha256', secret).update(payload).digest('hex');
 
   try {
     const signatureBuffer = Buffer.from(signature, 'hex');

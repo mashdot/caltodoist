@@ -71,9 +71,18 @@ npm run dev
 # Type check
 npm run typecheck
 
+# Run tests
+npm test           # or: npm run test:watch
+
+# Lint & format (Biome)
+npm run lint       # check
+npm run lint:fix   # apply safe fixes
+
 # Build
 npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on every push and pull request to `main`.
 
 ## Architecture
 

@@ -1,14 +1,14 @@
+import * as storage from '../services/storage';
+import * as todoist from '../services/todoist';
 import {
-  CalcomWebhookPayload,
+  type BookingPayload,
+  type CalcomWebhookPayload,
   TriggerEvent,
   isBookingPayload,
-  isNoShowPayload,
   isCalVideoNoShowPayload,
-  BookingPayload,
+  isNoShowPayload,
 } from '../types/calcom';
 import { verifyWebhookSignature } from '../utils/verify';
-import * as todoist from '../services/todoist';
-import * as storage from '../services/storage';
 
 async function handleBookingCreated(payload: BookingPayload): Promise<void> {
   const existingTaskId = await storage.getTaskId(payload.uid);
@@ -42,7 +42,9 @@ async function handleBookingRescheduled(payload: BookingPayload): Promise<void> 
   }
 
   if (!taskId) {
-    console.log(`No task found for booking ${payload.uid} (rescheduleUid: ${payload.rescheduleUid}), creating new task`);
+    console.log(
+      `No task found for booking ${payload.uid} (rescheduleUid: ${payload.rescheduleUid}), creating new task`
+    );
     await handleBookingCreated(payload);
     return;
   }
@@ -132,10 +134,7 @@ async function handleMeetingEnded(payload: BookingPayload): Promise<void> {
   console.log(`Completed task ${taskId} for ended meeting ${payload.uid}`);
 }
 
-async function handleNoShowUpdated(
-  bookingUid: string,
-  message: string
-): Promise<void> {
+async function handleNoShowUpdated(bookingUid: string, message: string): Promise<void> {
   const taskId = await storage.getTaskId(bookingUid);
   if (!taskId) {
     console.log(`No task found for booking ${bookingUid}`);
@@ -146,10 +145,7 @@ async function handleNoShowUpdated(
   console.log(`Added no-show comment to task ${taskId}`);
 }
 
-async function handleCalVideoNoShow(
-  bookingUid: string,
-  message: string
-): Promise<void> {
+async function handleCalVideoNoShow(bookingUid: string, message: string): Promise<void> {
   const taskId = await storage.getTaskId(bookingUid);
   if (!taskId) {
     console.log(`No task found for booking ${bookingUid}`);
@@ -169,8 +165,19 @@ export async function handleWebhookRequest(req: Request): Promise<Response> {
     return Response.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
-  const webhookPayload = JSON.parse(rawBody) as CalcomWebhookPayload;
-  const { triggerEvent, payload } = webhookPayload;
+  let webhookPayload: CalcomWebhookPayload;
+  try {
+    webhookPayload = JSON.parse(rawBody) as CalcomWebhookPayload;
+  } catch {
+    console.error('Failed to parse webhook body as JSON');
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { triggerEvent, payload } = webhookPayload ?? {};
+  if (!triggerEvent || typeof payload !== 'object' || payload === null) {
+    console.error('Webhook body missing triggerEvent or payload');
+    return Response.json({ error: 'Malformed webhook payload' }, { status: 400 });
+  }
 
   console.log(`Received webhook: ${triggerEvent}`);
 
@@ -250,9 +257,6 @@ export async function handleWebhookRequest(req: Request): Promise<Response> {
     return Response.json({ success: true, event: triggerEvent });
   } catch (error) {
     console.error(`Error handling webhook ${triggerEvent}:`, error);
-    return Response.json(
-      { error: 'Internal server error', event: triggerEvent },
-      { status: 500 }
-    );
+    return Response.json({ error: 'Internal server error', event: triggerEvent }, { status: 500 });
   }
 }
