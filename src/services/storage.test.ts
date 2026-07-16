@@ -29,7 +29,7 @@ describe('storage service', () => {
     await storage.saveMapping('booking-1', 'task-1');
 
     expect(mockStore.set).toHaveBeenCalledTimes(1);
-    const [key, value] = mockStore.set.mock.calls[0];
+    const [key, value] = mockStore.set.mock.calls[0] ?? [];
     expect(key).toBe('booking-1');
     const parsed = JSON.parse(value);
     expect(parsed.taskId).toBe('task-1');

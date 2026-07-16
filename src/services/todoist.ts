@@ -15,9 +15,18 @@ function getApi(): TodoistApi {
   return apiInstance;
 }
 
+/**
+ * Todoist renders task content/description as Markdown. Booker-supplied text
+ * (names, notes, locations) is escaped so it can't inject links or formatting
+ * into the task list. Escapes render invisibly, so display is unaffected.
+ */
+function escapeMarkdown(text: string): string {
+  return text.replace(/[\\`*_[\]()#>|~]/g, '\\$&');
+}
+
 function formatTaskContent(booking: BookingPayload): string {
   const attendeeName = booking.attendees[0]?.name || 'Unknown';
-  return `${booking.title} with ${attendeeName}`;
+  return escapeMarkdown(`${booking.title} with ${attendeeName}`);
 }
 
 function formatDueDatetime(startTime: string): string {
@@ -32,21 +41,23 @@ function formatDescription(booking: BookingPayload, prefix?: string): string {
     parts.push('');
   }
 
-  parts.push(`Event: ${booking.eventTitle}`);
+  parts.push(`Event: ${escapeMarkdown(booking.eventTitle)}`);
   parts.push(`Duration: ${booking.length} minutes`);
 
   if (booking.location) {
-    parts.push(`Location: ${booking.location}`);
+    parts.push(`Location: ${escapeMarkdown(booking.location)}`);
   }
 
   if (booking.attendees.length > 0) {
-    const attendeeInfo = booking.attendees.map((a) => `${a.name} (${a.email})`).join(', ');
+    const attendeeInfo = booking.attendees
+      .map((a) => escapeMarkdown(`${a.name} (${a.email})`))
+      .join(', ');
     parts.push(`Attendees: ${attendeeInfo}`);
   }
 
   if (booking.additionalNotes) {
     parts.push('');
-    parts.push(`Notes: ${booking.additionalNotes}`);
+    parts.push(`Notes: ${escapeMarkdown(booking.additionalNotes)}`);
   }
 
   parts.push('');

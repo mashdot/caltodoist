@@ -1,9 +1,11 @@
 name: CI
 
+# push covers main; pull_request covers feature branches — one run each,
+# no double-runs on PR branches.
 on:
   push:
-  pull_request:
     branches: [main]
+  pull_request:
 
 jobs:
   check:

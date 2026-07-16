@@ -67,7 +67,24 @@ describe('todoist service', () => {
           durationUnit: 'minute',
         })
       );
-      expect(mockApi.addTask.mock.calls[0][0]).not.toHaveProperty('dueDate');
+      expect(mockApi.addTask.mock.calls[0]?.[0]).not.toHaveProperty('dueDate');
+    });
+
+    it('escapes Markdown in booker-supplied text', async () => {
+      mockApi.addTask.mockResolvedValue({ id: 'task-1' });
+
+      await todoist.createTask(
+        booking({
+          attendees: [
+            { name: '[Click me](https://evil.example)', email: 'x@example.com', timeZone: 'UTC' },
+          ],
+          additionalNotes: '**bold** and `code`',
+        })
+      );
+
+      const args = mockApi.addTask.mock.calls[0]?.[0];
+      expect(args.content).toBe('Intro call with \\[Click me\\]\\(https://evil.example\\)');
+      expect(args.description).toContain('Notes: \\*\\*bold\\*\\* and \\`code\\`');
     });
 
     it('passes the configured project id', async () => {

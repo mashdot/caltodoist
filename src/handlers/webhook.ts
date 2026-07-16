@@ -3,10 +3,10 @@ import * as todoist from '../services/todoist';
 import {
   type BookingPayload,
   type CalcomWebhookPayload,
-  TriggerEvent,
   isBookingPayload,
   isCalVideoNoShowPayload,
   isNoShowPayload,
+  TriggerEvent,
 } from '../types/calcom';
 import { verifyWebhookSignature } from '../utils/verify';
 

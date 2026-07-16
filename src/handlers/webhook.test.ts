@@ -166,8 +166,9 @@ describe('handleWebhookRequest', () => {
     );
     await handleWebhookRequest(makeRequest(body));
 
-    const saveOrder = vi.mocked(storage.saveMapping).mock.invocationCallOrder[0];
-    const deleteOrder = vi.mocked(storage.deleteMapping).mock.invocationCallOrder[0];
+    // Fallbacks are chosen so a missing call fails the ordering assertion.
+    const saveOrder = vi.mocked(storage.saveMapping).mock.invocationCallOrder[0] ?? Infinity;
+    const deleteOrder = vi.mocked(storage.deleteMapping).mock.invocationCallOrder[0] ?? 0;
     expect(saveOrder).toBeLessThan(deleteOrder);
   });
 
