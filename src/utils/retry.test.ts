@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withRetry } from './retry';
+import { getHttpStatusCode, isTransientError, withRetry } from './retry';
 
 describe('withRetry', () => {
   beforeEach(() => {
@@ -43,5 +43,56 @@ describe('withRetry', () => {
 
     await assertion;
     expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry permanent (4xx) errors', async () => {
+    const notFound = Object.assign(new Error('not found'), { httpStatusCode: 404 });
+    const fn = vi.fn().mockRejectedValue(notFound);
+
+    await expect(withRetry(fn, { retries: 3, baseDelayMs: 10 })).rejects.toThrow('not found');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries rate limits and server errors', async () => {
+    const rateLimited = Object.assign(new Error('too many requests'), { httpStatusCode: 429 });
+    const fn = vi.fn().mockRejectedValueOnce(rateLimited).mockResolvedValueOnce('recovered');
+
+    const promise = withRetry(fn, { retries: 3, baseDelayMs: 10 });
+    await vi.runAllTimersAsync();
+
+    await expect(promise).resolves.toBe('recovered');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('respects a custom isRetryable predicate', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('nope'));
+
+    const promise = withRetry(fn, { retries: 3, baseDelayMs: 10, isRetryable: () => false });
+    await expect(promise).rejects.toThrow('nope');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getHttpStatusCode', () => {
+  it('reads httpStatusCode and status properties', () => {
+    expect(getHttpStatusCode(Object.assign(new Error('x'), { httpStatusCode: 404 }))).toBe(404);
+    expect(getHttpStatusCode(Object.assign(new Error('x'), { status: 500 }))).toBe(500);
+    expect(getHttpStatusCode(new Error('x'))).toBeUndefined();
+    expect(getHttpStatusCode('string error')).toBeUndefined();
+  });
+});
+
+describe('isTransientError', () => {
+  it('treats network errors, 408, 429 and 5xx as transient', () => {
+    expect(isTransientError(new Error('socket hang up'))).toBe(true);
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 408 }))).toBe(true);
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 429 }))).toBe(true);
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 503 }))).toBe(true);
+  });
+
+  it('treats other 4xx as permanent', () => {
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 400 }))).toBe(false);
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 401 }))).toBe(false);
+    expect(isTransientError(Object.assign(new Error('x'), { httpStatusCode: 404 }))).toBe(false);
   });
 });

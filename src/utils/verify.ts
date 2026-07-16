@@ -5,17 +5,20 @@ export function verifyWebhookSignature(
   signature: string | undefined,
   secret: string | undefined
 ): boolean {
-  // If no secret is configured, fail closed in production. Only skip
-  // verification outside production (local dev) as a convenience.
+  // If no secret is configured, fail closed. Environment detection (e.g.
+  // NODE_ENV) is unreliable on Netlify Functions, so skipping verification
+  // requires an explicit local-dev opt-out.
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('CALCOM_WEBHOOK_SECRET not set - rejecting webhook (cannot verify signature)');
-      return false;
+    if (process.env.ALLOW_UNVERIFIED_WEBHOOKS === 'true') {
+      console.warn(
+        'CALCOM_WEBHOOK_SECRET not set and ALLOW_UNVERIFIED_WEBHOOKS=true - skipping signature verification (local dev only)'
+      );
+      return true;
     }
-    console.warn(
-      'CALCOM_WEBHOOK_SECRET not set - skipping signature verification (non-production only)'
+    console.error(
+      'CALCOM_WEBHOOK_SECRET not set - rejecting webhook (set ALLOW_UNVERIFIED_WEBHOOKS=true to skip verification in local dev)'
     );
-    return true;
+    return false;
   }
 
   if (!signature) {

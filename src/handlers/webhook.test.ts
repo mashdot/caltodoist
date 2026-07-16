@@ -110,6 +110,62 @@ describe('handleWebhookRequest', () => {
     expect(storage.saveMapping).toHaveBeenCalledWith('booking-new', 'task-1');
   });
 
+  it('returns 400 when a known event has an unrecognized payload shape', async () => {
+    const body = JSON.stringify({
+      triggerEvent: TriggerEvent.BOOKING_CREATED,
+      payload: { uid: 'booking-new' }, // missing title/attendees/etc.
+    });
+    const res = await handleWebhookRequest(makeRequest(body));
+
+    expect(res.status).toBe(400);
+    expect(todoist.createTask).not.toHaveBeenCalled();
+  });
+
+  it('deletes the created task when saving the mapping fails, so redelivery cannot duplicate it', async () => {
+    vi.mocked(storage.getTaskId).mockResolvedValue(null);
+    vi.mocked(todoist.createTask).mockResolvedValue('task-1');
+    vi.mocked(storage.saveMapping).mockRejectedValue(new Error('blobs down'));
+
+    const body = JSON.stringify({
+      triggerEvent: TriggerEvent.BOOKING_CREATED,
+      payload: bookingPayload(),
+    });
+    const res = await handleWebhookRequest(makeRequest(body));
+
+    expect(res.status).toBe(500);
+    expect(todoist.deleteTask).toHaveBeenCalledWith('task-1');
+  });
+
+  it('saves the new mapping before deleting the old one on reschedule', async () => {
+    vi.mocked(storage.getTaskId).mockImplementation(async (uid: string) =>
+      uid === 'booking-old' ? 'task-1' : null
+    );
+
+    const body = JSON.stringify({
+      triggerEvent: TriggerEvent.BOOKING_RESCHEDULED,
+      payload: bookingPayload({ uid: 'booking-new', rescheduleUid: 'booking-old' }),
+    });
+    await handleWebhookRequest(makeRequest(body));
+
+    const saveOrder = vi.mocked(storage.saveMapping).mock.invocationCallOrder[0];
+    const deleteOrder = vi.mocked(storage.deleteMapping).mock.invocationCallOrder[0];
+    expect(saveOrder).toBeLessThan(deleteOrder);
+  });
+
+  it('deletes the task and mapping on BOOKING_CANCELLED', async () => {
+    vi.mocked(storage.getTaskId).mockResolvedValue('task-1');
+
+    const body = JSON.stringify({
+      triggerEvent: TriggerEvent.BOOKING_CANCELLED,
+      payload: bookingPayload(),
+    });
+    const res = await handleWebhookRequest(makeRequest(body));
+
+    expect(res.status).toBe(200);
+    expect(todoist.deleteTask).toHaveBeenCalledWith('task-1');
+    expect(storage.deleteMapping).toHaveBeenCalledWith('booking-new');
+  });
+
   it('creates a new task when a rescheduled booking has no known task', async () => {
     vi.mocked(storage.getTaskId).mockResolvedValue(null);
     vi.mocked(todoist.createTask).mockResolvedValue('task-2');

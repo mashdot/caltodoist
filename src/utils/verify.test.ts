@@ -9,15 +9,14 @@ function sign(payload: string, secret = SECRET): string {
 }
 
 describe('verifyWebhookSignature', () => {
-  const originalEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
+    vi.stubEnv('ALLOW_UNVERIFIED_WEBHOOKS', undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -43,13 +42,12 @@ describe('verifyWebhookSignature', () => {
     expect(verifyWebhookSignature('{}', 'abcd', SECRET)).toBe(false);
   });
 
-  it('fails closed when no secret is set in production', () => {
-    process.env.NODE_ENV = 'production';
+  it('fails closed when no secret is set', () => {
     expect(verifyWebhookSignature('{}', sign('{}'), undefined)).toBe(false);
   });
 
-  it('skips verification when no secret is set outside production', () => {
-    process.env.NODE_ENV = 'development';
+  it('skips verification without a secret only when explicitly allowed', () => {
+    vi.stubEnv('ALLOW_UNVERIFIED_WEBHOOKS', 'true');
     expect(verifyWebhookSignature('{}', undefined, undefined)).toBe(true);
   });
 });
