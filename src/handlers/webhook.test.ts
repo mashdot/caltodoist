@@ -36,6 +36,14 @@ function bookingPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeBody(
+  triggerEvent: TriggerEvent,
+  payload: unknown,
+  createdAt: string = new Date().toISOString()
+): string {
+  return JSON.stringify({ triggerEvent, createdAt, payload });
+}
+
 function makeRequest(body: string): Request {
   const signature = createHmac('sha256', SECRET).update(body).digest('hex');
   return new Request('https://example.com/api/cal/webhook', {
@@ -81,15 +89,32 @@ describe('handleWebhookRequest', () => {
     vi.mocked(storage.getTaskId).mockResolvedValue(null);
     vi.mocked(todoist.createTask).mockResolvedValue('task-1');
 
+    const body = makeBody(TriggerEvent.BOOKING_CREATED, bookingPayload());
+    const res = await handleWebhookRequest(makeRequest(body));
+
+    expect(res.status).toBe(200);
+    expect(todoist.createTask).toHaveBeenCalledOnce();
+    expect(storage.saveMapping).toHaveBeenCalledWith('booking-new', 'task-1');
+  });
+
+  it('rejects events older than the replay window', async () => {
+    const staleCreatedAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    const body = makeBody(TriggerEvent.BOOKING_CREATED, bookingPayload(), staleCreatedAt);
+    const res = await handleWebhookRequest(makeRequest(body));
+
+    expect(res.status).toBe(400);
+    expect(todoist.createTask).not.toHaveBeenCalled();
+  });
+
+  it('rejects events without a createdAt timestamp', async () => {
     const body = JSON.stringify({
       triggerEvent: TriggerEvent.BOOKING_CREATED,
       payload: bookingPayload(),
     });
     const res = await handleWebhookRequest(makeRequest(body));
 
-    expect(res.status).toBe(200);
-    expect(todoist.createTask).toHaveBeenCalledOnce();
-    expect(storage.saveMapping).toHaveBeenCalledWith('booking-new', 'task-1');
+    expect(res.status).toBe(400);
+    expect(todoist.createTask).not.toHaveBeenCalled();
   });
 
   it('migrates the mapping from the old uid on reschedule', async () => {
@@ -98,10 +123,10 @@ describe('handleWebhookRequest', () => {
       uid === 'booking-old' ? 'task-1' : null
     );
 
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_RESCHEDULED,
-      payload: bookingPayload({ uid: 'booking-new', rescheduleUid: 'booking-old' }),
-    });
+    const body = makeBody(
+      TriggerEvent.BOOKING_RESCHEDULED,
+      bookingPayload({ uid: 'booking-new', rescheduleUid: 'booking-old' })
+    );
     const res = await handleWebhookRequest(makeRequest(body));
 
     expect(res.status).toBe(200);
@@ -111,10 +136,7 @@ describe('handleWebhookRequest', () => {
   });
 
   it('returns 400 when a known event has an unrecognized payload shape', async () => {
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_CREATED,
-      payload: { uid: 'booking-new' }, // missing title/attendees/etc.
-    });
+    const body = makeBody(TriggerEvent.BOOKING_CREATED, { uid: 'booking-new' }); // missing title/attendees/etc.
     const res = await handleWebhookRequest(makeRequest(body));
 
     expect(res.status).toBe(400);
@@ -126,10 +148,7 @@ describe('handleWebhookRequest', () => {
     vi.mocked(todoist.createTask).mockResolvedValue('task-1');
     vi.mocked(storage.saveMapping).mockRejectedValue(new Error('blobs down'));
 
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_CREATED,
-      payload: bookingPayload(),
-    });
+    const body = makeBody(TriggerEvent.BOOKING_CREATED, bookingPayload());
     const res = await handleWebhookRequest(makeRequest(body));
 
     expect(res.status).toBe(500);
@@ -141,10 +160,10 @@ describe('handleWebhookRequest', () => {
       uid === 'booking-old' ? 'task-1' : null
     );
 
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_RESCHEDULED,
-      payload: bookingPayload({ uid: 'booking-new', rescheduleUid: 'booking-old' }),
-    });
+    const body = makeBody(
+      TriggerEvent.BOOKING_RESCHEDULED,
+      bookingPayload({ uid: 'booking-new', rescheduleUid: 'booking-old' })
+    );
     await handleWebhookRequest(makeRequest(body));
 
     const saveOrder = vi.mocked(storage.saveMapping).mock.invocationCallOrder[0];
@@ -155,10 +174,7 @@ describe('handleWebhookRequest', () => {
   it('deletes the task and mapping on BOOKING_CANCELLED', async () => {
     vi.mocked(storage.getTaskId).mockResolvedValue('task-1');
 
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_CANCELLED,
-      payload: bookingPayload(),
-    });
+    const body = makeBody(TriggerEvent.BOOKING_CANCELLED, bookingPayload());
     const res = await handleWebhookRequest(makeRequest(body));
 
     expect(res.status).toBe(200);
@@ -170,10 +186,10 @@ describe('handleWebhookRequest', () => {
     vi.mocked(storage.getTaskId).mockResolvedValue(null);
     vi.mocked(todoist.createTask).mockResolvedValue('task-2');
 
-    const body = JSON.stringify({
-      triggerEvent: TriggerEvent.BOOKING_RESCHEDULED,
-      payload: bookingPayload({ uid: 'booking-new', rescheduleUid: 'unknown' }),
-    });
+    const body = makeBody(
+      TriggerEvent.BOOKING_RESCHEDULED,
+      bookingPayload({ uid: 'booking-new', rescheduleUid: 'unknown' })
+    );
     const res = await handleWebhookRequest(makeRequest(body));
 
     expect(res.status).toBe(200);

@@ -149,6 +149,22 @@ async function handleCalVideoNoShow(bookingUid: string, message: string): Promis
   console.log(`Added Cal Video no-show comment to task ${taskId}`);
 }
 
+/**
+ * Maximum accepted age of a webhook event. The HMAC signature covers the raw
+ * body including `createdAt`, so a captured request can only be replayed
+ * within this window. Generous enough for Cal.com's own retry backoff.
+ */
+const MAX_EVENT_AGE_MS = 10 * 60 * 1000;
+
+function isStaleEvent(createdAt: unknown): boolean {
+  if (typeof createdAt !== 'string') return true;
+  const timestamp = new Date(createdAt).getTime();
+  if (Number.isNaN(timestamp)) return true;
+  // Future timestamps are allowed: clock skew is expected and a future
+  // createdAt cannot be a replay of an old capture.
+  return Date.now() - timestamp > MAX_EVENT_AGE_MS;
+}
+
 function unrecognizedPayload(triggerEvent: string): Response {
   // A 400 makes schema drift visible in Cal.com's webhook logs instead of
   // silently dropping the event with a 200.
@@ -176,10 +192,15 @@ export async function handleWebhookRequest(req: Request): Promise<Response> {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { triggerEvent, payload } = webhookPayload ?? {};
+  const { triggerEvent, createdAt, payload } = webhookPayload ?? {};
   if (!triggerEvent || typeof payload !== 'object' || payload === null) {
     console.error('Webhook body missing triggerEvent or payload');
     return Response.json({ error: 'Malformed webhook payload' }, { status: 400 });
+  }
+
+  if (isStaleEvent(createdAt)) {
+    console.error(`Rejecting stale or undated webhook event ${triggerEvent} (createdAt: ${createdAt})`);
+    return Response.json({ error: 'Stale webhook event', event: triggerEvent }, { status: 400 });
   }
 
   console.log(`Received webhook: ${triggerEvent}`);

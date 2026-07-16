@@ -36,6 +36,7 @@ src/utils/retry.ts           # Retry with backoff; only transient errors are ret
 - Storage layer abstracts Netlify Blobs with `store/get/remove` for booking-to-task mapping
 - Type guards (`isBookingPayload`, `isNoShowPayload`) validate payload shapes at runtime; a guard failure returns 400 so Cal.com surfaces schema drift instead of silently dropping the event
 - Handlers are ordered for Cal.com's at-least-once delivery: create rolls back the Todoist task if the mapping save fails, reschedule saves the new mapping before deleting the old, and `deleteTask` treats 404 as success
+- Replay protection: events whose signed `createdAt` is missing or older than 10 minutes are rejected with 400
 
 ## Environment Variables
 
