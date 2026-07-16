@@ -25,6 +25,8 @@ Automatically create Todoist tasks from Cal.com bookings. When someone books a m
 | `MEETING_STARTED` | Adds comment to task |
 | `MEETING_ENDED` | Completes the task |
 | `BOOKING_NO_SHOW_UPDATED` | Adds no-show comment |
+| `AFTER_HOSTS_CAL_VIDEO_NO_SHOW` | Adds Cal Video no-show comment |
+| `AFTER_GUESTS_CAL_VIDEO_NO_SHOW` | Adds Cal Video no-show comment |
 
 ## Setup
 
@@ -71,9 +73,21 @@ npm run dev
 # Type check
 npm run typecheck
 
+# Run tests
+npm test              # or: npm run test:watch
+npm run test:coverage # with coverage report
+
+# Lint & format (Biome)
+npm run lint       # check
+npm run lint:fix   # apply safe fixes
+
 # Build
 npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on every push and on pull requests to `main`.
+
+For local development without a webhook secret, set `ALLOW_UNVERIFIED_WEBHOOKS=true` to skip signature verification. Never set this in a deployed environment — without it, requests are rejected when no `CALCOM_WEBHOOK_SECRET` is configured.
 
 ## Architecture
 
@@ -89,6 +103,7 @@ npm run build
 │   ├── types/
 │   │   └── calcom.ts       # Cal.com webhook type definitions
 │   └── utils/
+│       ├── retry.ts        # Retry with backoff for external calls
 │       └── verify.ts       # Webhook signature verification
 └── public/
     └── index.html          # Landing page

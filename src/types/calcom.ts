@@ -123,20 +123,47 @@ export interface CalcomWebhookPayload {
   payload: BookingPayload | NoShowPayload | CalVideoNoShowPayload;
 }
 
-export function isBookingPayload(
-  payload: BookingPayload | NoShowPayload | CalVideoNoShowPayload
-): payload is BookingPayload {
-  return 'uid' in payload && 'title' in payload && 'attendees' in payload && 'organizer' in payload;
+type UnknownPayload =
+  | BookingPayload
+  | NoShowPayload
+  | CalVideoNoShowPayload
+  | Record<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
-export function isNoShowPayload(
-  payload: BookingPayload | NoShowPayload | CalVideoNoShowPayload
-): payload is NoShowPayload {
-  return 'message' in payload && 'bookingUid' in payload && !('title' in payload);
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
-export function isCalVideoNoShowPayload(
-  payload: BookingPayload | NoShowPayload | CalVideoNoShowPayload
-): payload is CalVideoNoShowPayload {
-  return 'webhook' in payload && 'message' in payload && 'title' in payload;
+export function isBookingPayload(payload: UnknownPayload): payload is BookingPayload {
+  if (!isRecord(payload)) return false;
+  return (
+    isNonEmptyString(payload.uid) &&
+    isNonEmptyString(payload.title) &&
+    Array.isArray(payload.attendees) &&
+    isRecord(payload.organizer) &&
+    isNonEmptyString(payload.startTime) &&
+    typeof payload.length === 'number'
+  );
+}
+
+export function isNoShowPayload(payload: UnknownPayload): payload is NoShowPayload {
+  if (!isRecord(payload)) return false;
+  return (
+    isNonEmptyString(payload.message) &&
+    isNonEmptyString(payload.bookingUid) &&
+    !('title' in payload)
+  );
+}
+
+export function isCalVideoNoShowPayload(payload: UnknownPayload): payload is CalVideoNoShowPayload {
+  if (!isRecord(payload)) return false;
+  return (
+    isRecord(payload.webhook) &&
+    isNonEmptyString(payload.message) &&
+    isNonEmptyString(payload.bookingUid) &&
+    'title' in payload
+  );
 }

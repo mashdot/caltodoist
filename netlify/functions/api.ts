@@ -1,4 +1,4 @@
-import type { Context, Config } from '@netlify/functions';
+import type { Config, Context } from '@netlify/functions';
 import { handleWebhookRequest } from '../../src/handlers/webhook';
 
 export default async (req: Request, _context: Context): Promise<Response> => {
@@ -23,5 +23,5 @@ export default async (req: Request, _context: Context): Promise<Response> => {
 };
 
 export const config: Config = {
-  path: ['/api/*', '/api/health'],
+  path: '/api/*',
 };

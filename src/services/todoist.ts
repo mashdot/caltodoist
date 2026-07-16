@@ -1,5 +1,6 @@
 import { TodoistApi } from '@doist/todoist-api-typescript';
-import { BookingPayload } from '../types/calcom';
+import type { BookingPayload } from '../types/calcom';
+import { getHttpStatusCode, withRetry } from '../utils/retry';
 
 let apiInstance: TodoistApi | null = null;
 
@@ -19,7 +20,7 @@ function formatTaskContent(booking: BookingPayload): string {
   return `${booking.title} with ${attendeeName}`;
 }
 
-function formatDueDate(startTime: string): string {
+function formatDueDatetime(startTime: string): string {
   return new Date(startTime).toISOString();
 }
 
@@ -39,9 +40,7 @@ function formatDescription(booking: BookingPayload, prefix?: string): string {
   }
 
   if (booking.attendees.length > 0) {
-    const attendeeInfo = booking.attendees
-      .map(a => `${a.name} (${a.email})`)
-      .join(', ');
+    const attendeeInfo = booking.attendees.map((a) => `${a.name} (${a.email})`).join(', ');
     parts.push(`Attendees: ${attendeeInfo}`);
   }
 
@@ -59,14 +58,18 @@ function formatDescription(booking: BookingPayload, prefix?: string): string {
 export async function createTask(booking: BookingPayload): Promise<string> {
   const api = getApi();
 
-  const task = await api.addTask({
-    content: formatTaskContent(booking),
-    description: formatDescription(booking),
-    dueDate: formatDueDate(booking.startTime),
-    projectId: process.env.TODOIST_PROJECT_ID || undefined,
-    duration: booking.length,
-    durationUnit: 'minute',
-  });
+  const task = await withRetry(
+    () =>
+      api.addTask({
+        content: formatTaskContent(booking),
+        description: formatDescription(booking),
+        dueDatetime: formatDueDatetime(booking.startTime),
+        projectId: process.env.TODOIST_PROJECT_ID || undefined,
+        duration: booking.length,
+        durationUnit: 'minute',
+      }),
+    { label: 'todoist.createTask' }
+  );
 
   return task.id;
 }
@@ -74,13 +77,17 @@ export async function createTask(booking: BookingPayload): Promise<string> {
 export async function updateTaskDueDate(taskId: string, booking: BookingPayload): Promise<void> {
   const api = getApi();
 
-  await api.updateTask(taskId, {
-    content: formatTaskContent(booking),
-    description: formatDescription(booking),
-    dueDate: formatDueDate(booking.startTime),
-    duration: booking.length,
-    durationUnit: 'minute',
-  });
+  await withRetry(
+    () =>
+      api.updateTask(taskId, {
+        content: formatTaskContent(booking),
+        description: formatDescription(booking),
+        dueDatetime: formatDueDatetime(booking.startTime),
+        duration: booking.length,
+        durationUnit: 'minute',
+      }),
+    { label: 'todoist.updateTaskDueDate' }
+  );
 }
 
 export async function updateTaskDescription(
@@ -90,26 +97,44 @@ export async function updateTaskDescription(
 ): Promise<void> {
   const api = getApi();
 
-  await api.updateTask(taskId, {
-    description: formatDescription(booking, prefix),
-  });
+  await withRetry(
+    () =>
+      api.updateTask(taskId, {
+        description: formatDescription(booking, prefix),
+      }),
+    { label: 'todoist.updateTaskDescription' }
+  );
 }
 
 export async function addTaskComment(taskId: string, content: string): Promise<void> {
   const api = getApi();
 
-  await api.addComment({
-    taskId,
-    content,
-  });
+  await withRetry(
+    () =>
+      api.addComment({
+        taskId,
+        content,
+      }),
+    { label: 'todoist.addTaskComment' }
+  );
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
   const api = getApi();
-  await api.deleteTask(taskId);
+  try {
+    await withRetry(() => api.deleteTask(taskId), { label: 'todoist.deleteTask' });
+  } catch (error) {
+    // A missing task means a previous delivery already deleted it. Treating
+    // 404 as success keeps deletes idempotent under Cal.com redelivery.
+    if (getHttpStatusCode(error) === 404) {
+      console.log(`Task ${taskId} already deleted, treating as success`);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function completeTask(taskId: string): Promise<void> {
   const api = getApi();
-  await api.closeTask(taskId);
+  await withRetry(() => api.closeTask(taskId), { label: 'todoist.completeTask' });
 }

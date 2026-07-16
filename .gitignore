@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# Test coverage
+coverage/
+
 # Environment files
 .env
 .env.local
@@ -11,6 +14,9 @@ dist/
 
 # Netlify
 .netlify/
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # IDE
 .vscode/
