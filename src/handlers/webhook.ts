@@ -199,7 +199,9 @@ export async function handleWebhookRequest(req: Request): Promise<Response> {
   }
 
   if (isStaleEvent(createdAt)) {
-    console.error(`Rejecting stale or undated webhook event ${triggerEvent} (createdAt: ${createdAt})`);
+    console.error(
+      `Rejecting stale or undated webhook event ${triggerEvent} (createdAt: ${createdAt})`
+    );
     return Response.json({ error: 'Stale webhook event', event: triggerEvent }, { status: 400 });
   }
 
