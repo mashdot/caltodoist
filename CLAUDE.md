@@ -37,6 +37,7 @@ src/utils/retry.ts           # Retry with backoff; only transient errors are ret
 - Type guards (`isBookingPayload`, `isNoShowPayload`) validate payload shapes at runtime; a guard failure returns 400 so Cal.com surfaces schema drift instead of silently dropping the event
 - Handlers are ordered for Cal.com's at-least-once delivery: create rolls back the Todoist task if the mapping save fails, reschedule saves the new mapping before deleting the old, and `deleteTask` treats 404 as success
 - Replay protection: events whose signed `createdAt` is missing or older than 10 minutes are rejected with 400
+- Booker-supplied text (names, emails, notes, titles, location) is Markdown-escaped before going into Todoist content/descriptions (`escapeMarkdown` in `todoist.ts`)
 
 ## Environment Variables
 

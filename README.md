@@ -10,6 +10,7 @@ Automatically create Todoist tasks from Cal.com bookings. When someone books a m
 - **Meeting tracking** - Tasks auto-complete when meetings end
 - **Duration support** - Task duration matches meeting length
 - **Payment tracking** - Payment status updates added to task description
+- **Hardened webhook receiver** - HMAC signature verification, 10-minute replay window, and Markdown escaping of booker-supplied text
 
 ## Supported Cal.com Events
 
@@ -85,7 +86,9 @@ npm run lint:fix   # apply safe fixes
 npm run build
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on every push and on pull requests to `main`.
+Requires Node 20+.
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on pushes to `main` and on every pull request.
 
 For local development without a webhook secret, set `ALLOW_UNVERIFIED_WEBHOOKS=true` to skip signature verification. Never set this in a deployed environment — without it, requests are rejected when no `CALCOM_WEBHOOK_SECRET` is configured.
 
